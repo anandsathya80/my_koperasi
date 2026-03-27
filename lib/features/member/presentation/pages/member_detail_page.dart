@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/service/pdf_service.dart';
 import '../../../saving/data/models/saving_model.dart';
@@ -12,6 +13,18 @@ class MemberDetailPage extends StatelessWidget {
   final Member member;
 
   const MemberDetailPage({super.key, required this.member});
+
+  String formatRupiah(double value) {
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    ).format(value);
+  }
+
+  String formatDate(DateTime date) {
+    return DateFormat('dd MMM yyyy').format(date);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,24 +41,27 @@ class MemberDetailPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
-      appBar: AppBar(
-        title: const Text("Detail Member"),
+      appBar: AppBar(title: const Text("Detail Member")),
+      body: Column(
+        children: [
+          _header(balance),
+          _summary(totalSaving, totalWithdrawal),
+          Expanded(
+            child: _transactionList(
+              context,
+              savings,
+              withdrawals,
+              balance,
+            ),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _header(member, balance),
-            _summaryCard(totalSaving, totalWithdrawal),
-            _actionButton(context, balance),
-            _transactionList(context, savings, withdrawals),
-          ],
-        ),
-      ),
+      floatingActionButton: _fab(context, balance),
     );
   }
 
   // ================= HEADER =================
-  Widget _header(Member member, double balance) {
+  Widget _header(double balance) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -53,68 +69,66 @@ class MemberDetailPage extends StatelessWidget {
         gradient: LinearGradient(
           colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)],
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
       ),
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 35,
-            backgroundColor: Colors.white,
-            child: Text(
-              member.name[0].toUpperCase(),
-              style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue),
-            ),
-          ),
+          Text(member.name, style: const TextStyle(color: Colors.white)),
           const SizedBox(height: 10),
-          Text(member.name,
+          Text(formatRupiah(balance),
               style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
-          Text(member.phone, style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 20),
-          const Text("Total Saldo", style: TextStyle(color: Colors.white70)),
-          Text(
-            "Rp ${balance.toStringAsFixed(0)}",
-            style: const TextStyle(
-                color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
-          ),
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
   // ================= SUMMARY =================
-  Widget _summaryCard(double saving, double withdrawal) {
+  Widget _summary(double saving, double withdrawal) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          _summaryItem("Tabungan", saving, Colors.green),
+          _card("Tabungan", saving, Colors.green),
           const SizedBox(width: 10),
-          _summaryItem("Penarikan", withdrawal, Colors.red),
+          _card("Penarikan", withdrawal, Colors.red),
         ],
       ),
     );
   }
 
-  Widget _summaryItem(String title, double amount, Color color) {
+  Widget _card(String title, double amount, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        constraints: const BoxConstraints(minHeight: 100), // tinggi minimal
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10)],
+          boxShadow: [
+            const BoxShadow(
+              color: Colors.black12,
+              blurRadius: 6,
+              offset: Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(title, style: const TextStyle(color: Colors.grey)),
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
-            Text(
-              "Rp ${amount.toStringAsFixed(0)}",
-              style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                formatRupiah(amount),
+                style: TextStyle(
+                    color: color, fontSize: 22, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
@@ -122,103 +136,127 @@ class MemberDetailPage extends StatelessWidget {
     );
   }
 
-  // ================= ACTION =================
-  Widget _actionButton(BuildContext context, double balance) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          _menuItem(
-            context,
-            "Tambah Tabungan",
-            Icons.arrow_downward,
-            Colors.green,
-            () => _showSavingForm(context, member.id),
-          ),
-          const SizedBox(height: 10),
-          _menuItem(
-            context,
-            "Tarik Saldo",
-            Icons.arrow_upward,
-            Colors.red,
-            () => _showWithdrawalForm(context, member.id, balance),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuItem(BuildContext context, String title, IconData icon,
-      Color color, VoidCallback onTap) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: color.withOpacity(0.1),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: color),
-        title: Text(title),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
-      ),
-    );
-  }
-
   // ================= LIST =================
-  Widget _transactionList(BuildContext context, List<Saving> savings,
-      List<Withdrawal> withdrawals) {
+  Widget _transactionList(
+    BuildContext context,
+    List<Saving> savings,
+    List<Withdrawal> withdrawals,
+    double balance,
+  ) {
+    if (savings.isEmpty && withdrawals.isEmpty) {
+      return const Center(child: Text("Belum ada transaksi"));
+    }
+
     final all = [
       ...savings.map((e) => {'type': 'in', 'data': e}),
       ...withdrawals.map((e) => {'type': 'out', 'data': e}),
     ];
 
     all.sort((a, b) {
-      final dateA = (a['data'] as dynamic).date;
-      final dateB = (b['data'] as dynamic).date;
-      return dateB.compareTo(dateA);
+      final aDate = (a['data'] as dynamic)?.date ?? DateTime.now();
+      final bDate = (b['data'] as dynamic)?.date ?? DateTime.now();
+      return bDate.compareTo(aDate);
     });
 
     return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
       itemCount: all.length,
       itemBuilder: (context, index) {
         final item = all[index];
         final isIn = item['type'] == 'in';
 
-        if (isIn) {
-          final data = item['data'] as Saving;
-          return _transactionTile(true, data.amount, data.note, data.date);
-        } else {
-          final data = item['data'] as Withdrawal;
-          return _transactionTile(false, data.amount, data.note, data.date);
+        // cast data sesuai tipe
+        final data = item['data'];
+
+        // periksa tipe data
+        double amount = 0;
+        String note = '-';
+        DateTime date = DateTime.now();
+
+        if (isIn && data is Saving) {
+          amount = data.amount ?? 0;
+          note = data.note ?? '-';
+          date = data.date ?? DateTime.now();
+        } else if (!isIn && data is Withdrawal) {
+          amount = data.amount ?? 0;
+          note = data.note ?? '-';
+          date = data.date ?? DateTime.now();
         }
+
+        return _transactionTile(
+          context,
+          isIn,
+          amount,
+          note,
+          date,
+          balance,
+        );
       },
     );
   }
 
+  // ================= TILE =================
   Widget _transactionTile(
-      bool isIn, double amount, String note, DateTime date) {
+    BuildContext context,
+    bool isIn,
+    double amount,
+    String note,
+    DateTime date,
+    double balance,
+  ) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: const EdgeInsets.all(10),
       child: ListTile(
         leading: Icon(
           isIn ? Icons.arrow_downward : Icons.arrow_upward,
           color: isIn ? Colors.green : Colors.red,
         ),
-        title: Text(
-          "Rp ${amount.toStringAsFixed(0)}",
-          style: TextStyle(
-              color: isIn ? Colors.green : Colors.red,
-              fontWeight: FontWeight.bold),
+        title: Text(formatRupiah(amount)),
+        subtitle: Text(note.isEmpty ? "-" : note),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(formatDate(date), style: const TextStyle(fontSize: 10)),
+            IconButton(
+              icon: const Icon(Icons.print),
+              onPressed: () async {
+                await _showPrintDialog(
+                  context: context,
+                  type: isIn ? "Tabungan" : "Penarikan",
+                  amount: amount,
+                  note: note,
+                  date: date,
+                  balance: balance,
+                );
+              },
+            )
+          ],
         ),
-        subtitle: Text(note),
-        trailing: Text("${date.day}/${date.month}/${date.year}"),
       ),
     );
   }
 
-  // ================= PRINT DIALOG =================
+  // ================= FAB =================
+  Widget _fab(BuildContext context, double balance) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        FloatingActionButton(
+          heroTag: "add",
+          onPressed: () => _showSavingForm(context, member.id),
+          child: const Icon(Icons.add),
+        ),
+        const SizedBox(height: 10),
+        FloatingActionButton(
+          heroTag: "withdraw",
+          backgroundColor: Colors.red,
+          onPressed: () => _showWithdrawalForm(context, member.id, balance),
+          child: const Icon(Icons.remove),
+        ),
+      ],
+    );
+  }
+
+  // ================= PRINT =================
   Future<void> _showPrintDialog({
     required BuildContext context,
     required String type,
@@ -231,7 +269,6 @@ class MemberDetailPage extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Cetak Bukti?"),
-        content: const Text("Ingin mencetak bukti transaksi?"),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -256,337 +293,270 @@ class MemberDetailPage extends StatelessWidget {
   }
 
   // ================= FORM TABUNGAN =================
-  void _showSavingForm(BuildContext context, String memberId,
-      {Saving? saving}) {
-    final amountController =
-        TextEditingController(text: saving?.amount.toString() ?? "");
-    final noteController = TextEditingController(text: saving?.note ?? "");
-
+  void _showSavingForm(BuildContext context, String memberId) {
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // 🔝 HEADER
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)],
-                      ),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(30)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 50,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.white70,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          saving == null ? "Tambah Tabungan" : "Edit Tabungan",
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) {
+          return AnimatedPadding(
+              duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(30)),
                   ),
-
-                  // 📄 FORM
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: formKey,
+                  child: SingleChildScrollView(
+                      child: Column(children: [
+                    // 🔝 HEADER
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)],
+                        ),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(30)),
+                      ),
                       child: Column(
                         children: [
-                          TextFormField(
-                            controller: amountController,
-                            keyboardType: TextInputType.number,
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return "Nominal wajib diisi";
-                              }
-                              final value = double.tryParse(v);
-                              if (value == null) return "Harus angka";
-                              if (value <= 0) return "Harus > 0";
-                              return null;
-                            },
-                            decoration: InputDecoration(
-                              labelText: "Nominal",
-                              prefixIcon: const Icon(Icons.attach_money),
-                              filled: true,
-                              fillColor: Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
-                              ),
+                          const Text(
+                            "Tambah Tabungan",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            width: 50,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.white70,
+                              borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: noteController,
-                            decoration: InputDecoration(
-                              labelText: "Catatan",
-                              prefixIcon: const Icon(Icons.note),
-                              filled: true,
-                              fillColor: Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
+                          const SizedBox(height: 10),
+                        ],
+                      ),
+                    ),
+
+                    // 📄 FORM
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Form(
+                        key: formKey,
+                        child: Column(
+                          children: [
+                            TextFormField(
+                              controller: amountController,
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (v == null || v.isEmpty) {
+                                  return "Nominal wajib diisi";
+                                }
+                                final value = double.tryParse(v);
+                                if (value == null) return "Harus angka";
+                                if (value <= 0) return "Harus > 0";
+                                return null;
+                              },
+                              decoration: InputDecoration(
+                                labelText: "Nominal",
+                                prefixIcon: const Icon(Icons.attach_money),
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 25),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                if (!formKey.currentState!.validate()) return;
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: noteController,
+                              decoration: InputDecoration(
+                                labelText: "Catatan",
+                                prefixIcon: const Icon(Icons.note),
+                                filled: true,
+                                fillColor: Colors.grey[100],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 25),
+                            SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (!formKey.currentState!.validate())
+                                      return;
 
-                                final provider = Provider.of<SavingProvider>(
-                                    context,
-                                    listen: false);
+                                    final amount = double.tryParse(
+                                            amountController.text) ??
+                                        0;
 
-                                final amount =
-                                    double.parse(amountController.text);
-                                final now = DateTime.now();
-
-                                provider.addSaving(
-                                    memberId, amount, noteController.text);
-
-                                final totalSaving = provider.getTotal(memberId);
-
-                                final withdrawalTotal =
-                                    Provider.of<WithdrawalProvider>(context,
+                                    Provider.of<SavingProvider>(context,
                                             listen: false)
-                                        .getTotal(memberId);
+                                        .addSaving(memberId, amount,
+                                            noteController.text);
 
-                                final newBalance =
-                                    totalSaving - withdrawalTotal;
-
-                                Navigator.pop(context);
-
-                                _showSnackBar(context, "Tabungan berhasil 💰");
-
-                                await _showPrintDialog(
-                                  context: context,
-                                  type: "Tabungan",
-                                  amount: amount,
-                                  note: noteController.text,
-                                  date: now,
-                                  balance: newBalance,
-                                );
-                              },
-                              child: const Text("Simpan"),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text("Simpan"),
+                                ))
+                          ],
+                        ),
                       ),
                     ),
-                  )
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+                  ]))));
+        });
+
+    // ================= FORM TARIK =================
   }
 
-  // ================= FORM PENARIKAN =================
   void _showWithdrawalForm(
-      BuildContext context, String memberId, double balance,
-      {Withdrawal? item}) {
-    final amountController =
-        TextEditingController(text: item?.amount.toString() ?? "");
-    final noteController = TextEditingController(text: item?.note ?? "");
-
+      BuildContext context, String memberId, double balance) {
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // 🔝 HEADER
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.red, Colors.orange],
-                      ),
-                      borderRadius:
-                          BorderRadius.vertical(top: Radius.circular(30)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 50,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.white70,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          "Tarik Saldo",
-                          style: TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          "Saldo: Rp ${balance.toStringAsFixed(0)}",
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // FORM
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: formKey,
-                      child: Column(
-                        children: [
-                          TextFormField(
-                            controller: amountController,
-                            keyboardType: TextInputType.number,
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return "Nominal wajib diisi";
-                              }
-                              final value = double.tryParse(v);
-                              if (value == null) return "Harus angka";
-                              if (value <= 0) return "Harus > 0";
-                              if (value > balance) {
-                                return "Saldo tidak cukup!";
-                              }
-                              return null;
-                            },
-                            decoration: InputDecoration(
-                              labelText: "Nominal",
-                              prefixIcon: const Icon(Icons.money_off),
-                              filled: true,
-                              fillColor: Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: noteController,
-                            decoration: InputDecoration(
-                              labelText: "Catatan",
-                              prefixIcon: const Icon(Icons.note),
-                              filled: true,
-                              fillColor: Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 25),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                if (!formKey.currentState!.validate()) return;
-
-                                final provider =
-                                    Provider.of<WithdrawalProvider>(context,
-                                        listen: false);
-
-                                final amount =
-                                    double.parse(amountController.text);
-                                final now = DateTime.now();
-
-                                provider.addWithdrawal(
-                                    memberId, amount, noteController.text);
-
-                                final savingTotal = Provider.of<SavingProvider>(
-                                        context,
-                                        listen: false)
-                                    .getTotal(memberId);
-
-                                final withdrawalTotal =
-                                    provider.getTotal(memberId);
-
-                                final newBalance =
-                                    savingTotal - withdrawalTotal;
-
-                                Navigator.pop(context);
-
-                                _showSnackBar(context, "Penarikan berhasil 💸");
-
-                                await _showPrintDialog(
-                                  context: context,
-                                  type: "Penarikan",
-                                  amount: amount,
-                                  note: noteController.text,
-                                  date: now,
-                                  balance: newBalance,
-                                );
-                              },
-                              child: const Text("Tarik Saldo"),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
-                    ),
-                  )
-                ],
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) {
+          return AnimatedPadding(
+              duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+              child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(30)),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(children: [
+                      // 🔝 HEADER
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.red, Colors.orange],
+                          ),
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(30)),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: Colors.white70,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              "Tarik Saldo",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              "Saldo: Rp ${balance.toStringAsFixed(0)}",
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
 
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+                      // FORM
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Form(
+                            key: formKey,
+                            child: Column(
+                              children: [
+                                TextFormField(
+                                  controller: amountController,
+                                  keyboardType: TextInputType.number,
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) {
+                                      return "Nominal wajib diisi";
+                                    }
+                                    final value = double.tryParse(v);
+                                    if (value == null) return "Harus angka";
+                                    if (value <= 0) return "Harus > 0";
+                                    if (value > balance) {
+                                      return "Saldo tidak cukup!";
+                                    }
+                                    return null;
+                                  },
+                                  decoration: InputDecoration(
+                                    labelText: "Nominal",
+                                    prefixIcon: const Icon(Icons.money_off),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: noteController,
+                                  decoration: InputDecoration(
+                                    labelText: "Catatan",
+                                    prefixIcon: const Icon(Icons.note),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 25),
+                                SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: () async {
+                                        if (!formKey.currentState!.validate())
+                                          return;
+
+                                        final amount = double.tryParse(
+                                                amountController.text) ??
+                                            0;
+
+                                        Provider.of<WithdrawalProvider>(context,
+                                                listen: false)
+                                            .addWithdrawal(memberId, amount,
+                                                noteController.text);
+
+                                        Navigator.pop(context);
+                                      },
+                                      child: const Text("Tarik"),
+                                    ))
+                              ],
+                            )),
+                      ),
+                    ]),
+                  )));
+        });
   }
 }
