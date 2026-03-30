@@ -9,10 +9,19 @@ import '../../../withdrawal/data/models/withdrawal_model.dart';
 import '../../../withdrawal/presentation/providers/withdrawal_provider.dart';
 import '../../data/models/member_model.dart';
 
-class MemberDetailPage extends StatelessWidget {
+class MemberDetailPage extends StatefulWidget {
   final Member member;
 
   const MemberDetailPage({super.key, required this.member});
+
+  @override
+  State<MemberDetailPage> createState() => _MemberDetailPageState();
+}
+
+class _MemberDetailPageState extends State<MemberDetailPage> {
+  String selectedType = 'all';
+  DateTime? startDate;
+  DateTime? endDate;
 
   String formatRupiah(double value) {
     return NumberFormat.currency(
@@ -31,11 +40,11 @@ class MemberDetailPage extends StatelessWidget {
     final savingProvider = Provider.of<SavingProvider>(context);
     final withdrawalProvider = Provider.of<WithdrawalProvider>(context);
 
-    final savings = savingProvider.getByMember(member.id);
-    final withdrawals = withdrawalProvider.getByMember(member.id);
+    final savings = savingProvider.getByMember(widget.member.id);
+    final withdrawals = withdrawalProvider.getByMember(widget.member.id);
 
-    final totalSaving = savingProvider.getTotal(member.id);
-    final totalWithdrawal = withdrawalProvider.getTotal(member.id);
+    final totalSaving = savingProvider.getTotal(widget.member.id);
+    final totalWithdrawal = withdrawalProvider.getTotal(widget.member.id);
 
     final balance = totalSaving - totalWithdrawal;
 
@@ -46,6 +55,7 @@ class MemberDetailPage extends StatelessWidget {
         children: [
           _header(balance),
           _summary(totalSaving, totalWithdrawal),
+          _filterSection(),
           Expanded(
             child: _transactionList(
               context,
@@ -72,7 +82,7 @@ class MemberDetailPage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(member.name, style: const TextStyle(color: Colors.white)),
+          Text(widget.member.name, style: const TextStyle(color: Colors.white)),
           const SizedBox(height: 10),
           Text(formatRupiah(balance),
               style: const TextStyle(
@@ -143,35 +153,68 @@ class MemberDetailPage extends StatelessWidget {
     List<Withdrawal> withdrawals,
     double balance,
   ) {
-    if (savings.isEmpty && withdrawals.isEmpty) {
-      return const Center(child: Text("Belum ada transaksi"));
-    }
-
+    // 🔀 Gabungkan data
     final all = [
       ...savings.map((e) => {'type': 'in', 'data': e}),
       ...withdrawals.map((e) => {'type': 'out', 'data': e}),
     ];
 
+    // 🔽 SORT by date terbaru
     all.sort((a, b) {
-      final aDate = (a['data'] as dynamic)?.date ?? DateTime.now();
-      final bDate = (b['data'] as dynamic)?.date ?? DateTime.now();
+      final aDate = (a['data'] as dynamic?)?.date ?? DateTime.now();
+      final bDate = (b['data'] as dynamic?)?.date ?? DateTime.now();
       return bDate.compareTo(aDate);
     });
 
-    return ListView.builder(
-      itemCount: all.length,
-      itemBuilder: (context, index) {
-        final item = all[index];
-        final isIn = item['type'] == 'in';
+    // 🎯 FILTER
+    final filtered = all.where((item) {
+      final isIn = item['type'] == 'in';
+      final data = item['data'];
 
-        // cast data sesuai tipe
+      double amount = 0;
+      String note = '-';
+      DateTime date = DateTime.now();
+
+      // 🧠 mapping aman sesuai tipe
+      if (isIn && data is Saving) {
+        amount = data.amount ?? 0;
+        note = data.note ?? '-';
+        date = data.date ?? DateTime.now();
+      } else if (!isIn && data is Withdrawal) {
+        amount = data.amount ?? 0;
+        note = data.note ?? '-';
+        date = data.date ?? DateTime.now();
+      }
+
+      // 🔘 FILTER TYPE
+      if (selectedType == 'in' && !isIn) return false;
+      if (selectedType == 'out' && isIn) return false;
+
+      // 📅 FILTER TANGGAL
+      if (startDate != null && date.isBefore(startDate!)) return false;
+      if (endDate != null && date.isAfter(endDate!)) return false;
+
+      return true;
+    }).toList();
+
+    // 🚫 Jika kosong
+    if (filtered.isEmpty) {
+      return const Center(child: Text("Tidak ada data sesuai filter"));
+    }
+
+    // 📋 LIST
+    return ListView.builder(
+      itemCount: filtered.length,
+      itemBuilder: (context, index) {
+        final item = filtered[index];
+        final isIn = item['type'] == 'in';
         final data = item['data'];
 
-        // periksa tipe data
         double amount = 0;
         String note = '-';
         DateTime date = DateTime.now();
 
+        // 🧠 mapping ulang untuk UI
         if (isIn && data is Saving) {
           amount = data.amount ?? 0;
           note = data.note ?? '-';
@@ -242,14 +285,15 @@ class MemberDetailPage extends StatelessWidget {
       children: [
         FloatingActionButton(
           heroTag: "add",
-          onPressed: () => _showSavingForm(context, member.id),
+          onPressed: () => _showSavingForm(context, widget.member.id),
           child: const Icon(Icons.add),
         ),
         const SizedBox(height: 10),
         FloatingActionButton(
           heroTag: "withdraw",
           backgroundColor: Colors.red,
-          onPressed: () => _showWithdrawalForm(context, member.id, balance),
+          onPressed: () =>
+              _showWithdrawalForm(context, widget.member.id, balance),
           child: const Icon(Icons.remove),
         ),
       ],
@@ -282,7 +326,7 @@ class MemberDetailPage extends StatelessWidget {
 
     if (result == true) {
       await PdfService.generateTransactionPdf(
-        name: member.name,
+        name: widget.member.name,
         type: type,
         amount: amount,
         note: note,
@@ -558,5 +602,109 @@ class MemberDetailPage extends StatelessWidget {
                     ]),
                   )));
         });
+  }
+
+  Widget _filterSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Filter",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+
+              // 🔥 RESET BUTTON
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    selectedType = 'all';
+                    startDate = null;
+                    endDate = null;
+                  });
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text("Reset"),
+              )
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // 🔘 FILTER TYPE
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text("Semua"),
+                selected: selectedType == 'all',
+                onSelected: (_) => setState(() => selectedType = 'all'),
+              ),
+              ChoiceChip(
+                label: const Text("Tabungan"),
+                selected: selectedType == 'in',
+                onSelected: (_) => setState(() => selectedType = 'in'),
+              ),
+              ChoiceChip(
+                label: const Text("Penarikan"),
+                selected: selectedType == 'out',
+                onSelected: (_) => setState(() => selectedType = 'out'),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // 📅 FILTER DATE
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: startDate ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+
+                    if (picked != null) {
+                      setState(() => startDate = picked);
+                    }
+                  },
+                  child: Text(
+                    startDate == null ? "Dari Tanggal" : formatDate(startDate!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: endDate ?? DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+
+                    if (picked != null) {
+                      setState(() => endDate = picked);
+                    }
+                  },
+                  child: Text(
+                    endDate == null ? "Sampai Tanggal" : formatDate(endDate!),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
