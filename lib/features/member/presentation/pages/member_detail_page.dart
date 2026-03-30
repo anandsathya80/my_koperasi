@@ -8,6 +8,7 @@ import '../../../saving/presentation/providers/saving_provider.dart';
 import '../../../withdrawal/data/models/withdrawal_model.dart';
 import '../../../withdrawal/presentation/providers/withdrawal_provider.dart';
 import '../../data/models/member_model.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class MemberDetailPage extends StatefulWidget {
   final Member member;
@@ -35,6 +36,55 @@ class _MemberDetailPageState extends State<MemberDetailPage> {
     return DateFormat('dd MMM yyyy').format(date);
   }
 
+  Map<String, double> _calculateFilteredData(
+    List<Saving> savings,
+    List<Withdrawal> withdrawals,
+  ) {
+    final all = [
+      ...savings.map((e) => {'type': 'in', 'data': e}),
+      ...withdrawals.map((e) => {'type': 'out', 'data': e}),
+    ];
+
+    double totalSaving = 0;
+    double totalWithdrawal = 0;
+
+    for (var item in all) {
+      final isIn = item['type'] == 'in';
+      final data = item['data'];
+
+      double amount = 0;
+      DateTime date = DateTime.now();
+
+      if (isIn && data is Saving) {
+        amount = data.amount ?? 0;
+        date = data.date ?? DateTime.now();
+      } else if (!isIn && data is Withdrawal) {
+        amount = data.amount ?? 0;
+        date = data.date ?? DateTime.now();
+      }
+
+      // 🔘 FILTER TYPE
+      if (selectedType == 'in' && !isIn) continue;
+      if (selectedType == 'out' && isIn) continue;
+
+      // 📅 FILTER DATE
+      if (startDate != null && date.isBefore(startDate!)) continue;
+      if (endDate != null && date.isAfter(endDate!)) continue;
+
+      // ➕ AKUMULASI
+      if (isIn) {
+        totalSaving += amount;
+      } else {
+        totalWithdrawal += amount;
+      }
+    }
+
+    return {
+      'saving': totalSaving,
+      'withdrawal': totalWithdrawal,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final savingProvider = Provider.of<SavingProvider>(context);
@@ -47,24 +97,30 @@ class _MemberDetailPageState extends State<MemberDetailPage> {
     final totalWithdrawal = withdrawalProvider.getTotal(widget.member.id);
 
     final balance = totalSaving - totalWithdrawal;
+    final filteredData = _calculateFilteredData(savings, withdrawals);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(title: const Text("Detail Member")),
-      body: Column(
-        children: [
-          _header(balance),
-          _summary(totalSaving, totalWithdrawal),
-          _filterSection(),
-          Expanded(
-            child: _transactionList(
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _header(balance),
+            _summary(totalSaving, totalWithdrawal),
+            _buildChart(
+              filteredData['saving'] ?? 0,
+              filteredData['withdrawal'] ?? 0,
+            ),
+            _filterSection(),
+            _transactionList(
               context,
               savings,
               withdrawals,
               balance,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       floatingActionButton: _fab(context, balance),
     );
@@ -204,6 +260,8 @@ class _MemberDetailPageState extends State<MemberDetailPage> {
 
     // 📋 LIST
     return ListView.builder(
+      shrinkWrap: true, // 🔥 WAJIB
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: filtered.length,
       itemBuilder: (context, index) {
         final item = filtered[index];
@@ -704,6 +762,68 @@ class _MemberDetailPageState extends State<MemberDetailPage> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildChart(double totalSaving, double totalWithdrawal) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Statistik (Berdasarkan Filter)",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 200,
+              child: BarChart(
+                BarChartData(
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() == 0) {
+                            return const Text("Tabungan");
+                          } else {
+                            return const Text("Penarikan");
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  barGroups: [
+                    BarChartGroupData(x: 0, barRods: [
+                      BarChartRodData(
+                        toY: totalSaving,
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(6),
+                      )
+                    ]),
+                    BarChartGroupData(x: 1, barRods: [
+                      BarChartRodData(
+                        toY: totalWithdrawal,
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(6),
+                      )
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
